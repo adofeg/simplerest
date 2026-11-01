@@ -5,6 +5,7 @@ use Boctulus\Simplerest\Core\Interfaces\IMigration;
 use Boctulus\Simplerest\Core\Libs\Config;
 use Boctulus\Simplerest\Core\Libs\DB;
 use Boctulus\Simplerest\Core\Libs\Files;
+use Boctulus\Simplerest\Core\Libs\MigrationCatalog;
 use Boctulus\Simplerest\Core\Libs\PHPLexicalAnalyzer;
 use Boctulus\Simplerest\Core\Libs\Schema;
 use Boctulus\Simplerest\Core\Libs\StdOut;
@@ -22,10 +23,10 @@ abstract class BaseMigrationsCommand extends BaseCommand
         }
         foreach ($parsed as $key => $value) {
             if (str_starts_with($key, '_')) continue;
+            $key_dashed = str_replace('_', '-', $key);
             if ($value === true) {
-                $opt[] = "--{$key}";
+                $opt[] = "--{$key_dashed}";
             } elseif ($value !== false && $value !== null) {
-                $key_dashed = str_replace('_', '-', $key);
                 $opt[] = "--{$key_dashed}={$value}";
             }
         }
@@ -716,41 +717,63 @@ abstract class BaseMigrationsCommand extends BaseCommand
         $dir      = null;
         $table    = null;
         $contains = null;
+        $full_discovery = false;
 
         foreach ($opt as $o) {
             if (Strings::startsWith('--dir=', $o))      $dir      = substr($o, 6);
             elseif (Strings::startsWith('--table=', $o))    $table    = substr($o, 8);
             elseif (Strings::startsWith('--contains=', $o)) $contains = substr($o, 11);
+            elseif ($o === '--full-discovery') $full_discovery = true;
         }
 
-        $path = $dir ? MIGRATIONS_PATH . DIRECTORY_SEPARATOR . $dir : MIGRATIONS_PATH;
-
-        if (!is_dir($path)) {
-            throw new \Exception("Directory $path not found");
-        }
-
-        $files = [];
-        foreach (new \DirectoryIterator($path) as $fileInfo) {
-            if ($fileInfo->isDot() || $fileInfo->isDir()) continue;
-            $filename = $fileInfo->getFilename();
-            if (Strings::startsWith('.', $filename) || $fileInfo->getExtension() != 'php') continue;
-            $files[] = $filename;
+        if ($full_discovery && $dir !== null) {
+            throw new \InvalidArgumentException('--dir cannot be combined with --full-discovery');
         }
 
         $migrations = [];
-        foreach ($files as $filename) {
-            $full_path    = $path . DIRECTORY_SEPARATOR . $filename;
-            $class_name   = PHPLexicalAnalyzer::getClassNameByFileName($full_path);
-            $file_content = file_get_contents($full_path);
+        if ($full_discovery) {
+            foreach (MigrationCatalog::discover() as $migration) {
+                $full_path = $migration['absolute_path'];
+                $filename = $migration['filename'];
+                $class_name = PHPLexicalAnalyzer::getClassNameByFileName($full_path);
+                $file_content = file_get_contents($full_path);
 
-            $table_value = null;
-            if (preg_match('/\$table\s*=\s*[\'"]([^\'"]+)[\'"]/', $file_content, $matches)) {
-                $table_value = $matches[1];
+                $table_value = null;
+                if ($file_content !== false && preg_match('/\$table\s*=\s*[\'\"]([^\'\"]+)[\'\"]/', $file_content, $matches)) {
+                    $table_value = $matches[1];
+                }
+
+                $migrations[] = [
+                    'filename' => $filename,
+                    'class_name' => $class_name,
+                    'table' => $table_value,
+                    'source' => $migration['source'],
+                    'relative_path' => $migration['relative_path'],
+                ];
+            }
+        } else {
+            $path = $dir ? MIGRATIONS_PATH . DIRECTORY_SEPARATOR . $dir : MIGRATIONS_PATH;
+            if (!is_dir($path)) {
+                throw new \Exception("Directory $path not found");
             }
 
-            $migrations[] = ['filename' => $filename, 'class_name' => $class_name, 'table' => $table_value];
-        }
+            foreach (new \DirectoryIterator($path) as $fileInfo) {
+                if ($fileInfo->isDot() || $fileInfo->isDir()) continue;
+                $filename = $fileInfo->getFilename();
+                if (Strings::startsWith('.', $filename) || $fileInfo->getExtension() != 'php') continue;
 
+                $full_path = $path . DIRECTORY_SEPARATOR . $filename;
+                $class_name = PHPLexicalAnalyzer::getClassNameByFileName($full_path);
+                $file_content = file_get_contents($full_path);
+
+                $table_value = null;
+                if ($file_content !== false && preg_match('/\$table\s*=\s*[\'\"]([^\'\"]+)[\'\"]/', $file_content, $matches)) {
+                    $table_value = $matches[1];
+                }
+
+                $migrations[] = ['filename' => $filename, 'class_name' => $class_name, 'table' => $table_value];
+            }
+        }
         $filtered = $migrations;
 
         if ($table !== null) {
@@ -763,17 +786,215 @@ abstract class BaseMigrationsCommand extends BaseCommand
             $filtered = array_filter($filtered, function ($mig) use ($contains) {
                 return str_contains($mig['filename'], $contains) ||
                     str_contains($mig['class_name'], $contains) ||
+                    str_contains($mig['relative_path'] ?? '', $contains) ||
+                    str_contains($mig['source'] ?? '', $contains) ||
                     ($mig['table'] !== null && str_contains($mig['table'], $contains));
             });
         }
 
         if (empty($filtered)) {
             echo "No migrations found matching the criteria.\n";
+        } elseif ($full_discovery) {
+            echo str_pad('SOURCE', 32) . "MIGRATION\n";
+            foreach ($filtered as $mig) {
+                echo str_pad($mig['source'], 32) . $mig['relative_path'];
+                if ($mig['table']) echo " (Table: {$mig['table']})";
+                echo "\n";
+            }
         } else {
             foreach ($filtered as $mig) {
                 $table_str = $mig['table'] ? " (Table: {$mig['table']})" : '';
                 echo "{$mig['filename']} - {$mig['class_name']}{$table_str}\n";
             }
+        }
+    }
+
+    protected function migrationConnectionFilter(array $opt): ?string
+    {
+        $to_db = null;
+        foreach ($opt as $option) {
+            if (preg_match('/^--to[=:]([a-z0-9_-]+)$/i', $option, $matches)) {
+                $to_db = $matches[1];
+            }
+        }
+
+        if ($to_db !== null && !DB::connectionExists($to_db)) {
+            throw new \InvalidArgumentException("Connection '$to_db' is not registered in db_connections");
+        }
+
+        return $to_db;
+    }
+
+    protected function migrationRegistryRows(?string $to_db): array
+    {
+        DB::getDefaultConnection();
+        if (!Schema::hasTable('migrations')) {
+            return [];
+        }
+
+        return table('migrations')
+            ->when(
+                $to_db !== null,
+                function ($query) use ($to_db) { $query->where(['db' => $to_db]); },
+                function ($query) { $query->whereNull('db'); }
+            )
+            ->orderBy(['id' => 'ASC'])
+            ->get();
+    }
+
+    protected function doListOnDb(...$opt): void
+    {
+        DB::getDefaultConnection();
+        $to_db = $this->migrationConnectionFilter($opt);
+        $has_table = Schema::hasTable('migrations');
+        $rows = $this->migrationRegistryRows($to_db);
+        $conn_label = $to_db ?? 'default';
+
+        StdOut::print("Migraciones registradas en `migrations` (`$conn_label`)" . PHP_EOL);
+        StdOut::print(str_repeat('─', 60) . PHP_EOL);
+
+        if (!$has_table) {
+            StdOut::print("  La tabla migrations no existe." . PHP_EOL);
+        } elseif (empty($rows)) {
+            StdOut::print("  No hay migraciones registradas." . PHP_EOL);
+        } else {
+            foreach ($rows as $row) {
+                $filename = $row['filename'] ?? '';
+                $path = $row['path'] ?? null;
+                $createdAt = $row['created_at'] ?? null;
+                $details = [];
+
+                if ($path !== null && $path !== '') $details[] = "path=$path";
+                if ($createdAt !== null && $createdAt !== '') $details[] = "created_at=$createdAt";
+
+                $suffix = empty($details) ? '' : ' [' . implode(', ', $details) . ']';
+                StdOut::print("  " . ($row['id'] ?? '') . "  $filename$suffix" . PHP_EOL);
+            }
+        }
+
+        StdOut::print(str_repeat('─', 60) . PHP_EOL);
+        StdOut::print("  " . count($rows) . " registradas" . PHP_EOL);
+    }
+
+    protected function doStatus(...$opt): void
+    {
+        $dir = null;
+        $full_discovery = false;
+        foreach ($opt as $option) {
+            if (Strings::startsWith('--dir=', $option)) {
+                $dir = substr($option, 6);
+            } elseif ($option === '--full-discovery') {
+                $full_discovery = true;
+            }
+        }
+
+        if ($full_discovery && $dir !== null) {
+            throw new \InvalidArgumentException('--dir cannot be combined with --full-discovery');
+        }
+
+        DB::getDefaultConnection();
+        $to_db = $this->migrationConnectionFilter($opt);
+        $conn_label = $to_db ?? 'default';
+        $has_table = Schema::hasTable('migrations');
+        $applied_rows = $this->migrationRegistryRows($to_db);
+
+        if ($full_discovery) {
+            $migrations = MigrationCatalog::discover();
+            $known_identities = [];
+            foreach ($migrations as $migration) {
+                $known_identities[MigrationCatalog::identityKey($migration['relative_path'])] = true;
+            }
+
+            $applied = [];
+            $orphaned_rows = [];
+            foreach ($applied_rows as $row) {
+                $identity = MigrationCatalog::identityFromRegistryRow($row);
+                $identity_key = $identity !== null ? MigrationCatalog::identityKey($identity) : null;
+                if ($identity_key !== null && isset($known_identities[$identity_key])) {
+                    $applied[$identity_key] = true;
+                } else {
+                    $orphaned_rows[] = $row;
+                }
+            }
+
+            StdOut::print("Estado de Migraciones (`$conn_label`, descubrimiento completo)" . PHP_EOL);
+            StdOut::print(str_pad('SOURCE', 32) . str_pad('MIGRATION', 66) . "STATUS" . PHP_EOL);
+            StdOut::print(str_repeat('─', 112) . PHP_EOL);
+
+            $applied_count = 0;
+            $pending_count = 0;
+            foreach ($migrations as $migration) {
+                $identity_key = MigrationCatalog::identityKey($migration['relative_path']);
+                $is_applied = isset($applied[$identity_key]);
+                $status = $is_applied ? 'Applied' : 'Pending';
+                $is_applied ? $applied_count++ : $pending_count++;
+                StdOut::print(str_pad($migration['source'], 32) . str_pad($migration['relative_path'], 66) . $status . PHP_EOL);
+            }
+
+            $orphaned_count = count($orphaned_rows);
+            foreach ($orphaned_rows as $row) {
+                $filename = (string) ($row['filename'] ?? '(sin nombre)');
+                $stored_path = trim((string) ($row['path'] ?? ''));
+                $identity = MigrationCatalog::identityFromRegistryRow($row);
+                $label = $identity ?? ($stored_path === '' ? $filename : $stored_path . '/' . $filename);
+                StdOut::print(str_pad('unknown', 32) . str_pad($label, 66) . 'Orphaned' . PHP_EOL);
+            }
+
+            StdOut::print(str_repeat('─', 112) . PHP_EOL);
+            StdOut::print("  $applied_count aplicadas   $pending_count pendientes   $orphaned_count huérfanas" . PHP_EOL);
+            if (!$has_table) {
+                StdOut::print("  La tabla migrations no existe; no hay registros aplicados que comparar." . PHP_EOL);
+            }
+            return;
+        }
+
+        $path = $dir ? MIGRATIONS_PATH . DIRECTORY_SEPARATOR . $dir : MIGRATIONS_PATH;
+        if (!is_dir($path)) {
+            throw new \Exception("Directory $path not found");
+        }
+
+        $files_on_disk = [];
+        foreach (new \DirectoryIterator($path) as $fileInfo) {
+            if ($fileInfo->isDot() || $fileInfo->isDir()) continue;
+            $filename = $fileInfo->getFilename();
+            if (Strings::startsWith('.', $filename) || strtolower($fileInfo->getExtension()) !== 'php') continue;
+            $files_on_disk[] = $filename;
+        }
+        sort($files_on_disk, SORT_STRING);
+
+        $applied_filenames = [];
+        foreach ($applied_rows as $row) {
+            $applied_filenames[$row['filename']] = true;
+        }
+
+        StdOut::print("Estado de Migraciones (`$conn_label`)" . PHP_EOL);
+        StdOut::print(str_repeat('─', 60) . PHP_EOL);
+
+        $pending = 0;
+        $applied = 0;
+        $orphaned = 0;
+        foreach ($files_on_disk as $filename) {
+            if (isset($applied_filenames[$filename])) {
+                StdOut::print("  ✅ $filename");
+                unset($applied_filenames[$filename]);
+                $applied++;
+            } else {
+                StdOut::print("  ❓ $filename");
+                $pending++;
+            }
+        }
+
+        foreach ($applied_filenames as $filename => $_) {
+            if (!file_exists($path . DIRECTORY_SEPARATOR . $filename)) {
+                StdOut::print("  ⚠️  $filename (archivo faltante)");
+                $orphaned++;
+            }
+        }
+
+        StdOut::print(str_repeat('─', 60) . PHP_EOL);
+        StdOut::print("  ✅ $applied aplicadas   ❓ $pending pendientes   ⚠️  $orphaned huérfanas" . PHP_EOL);
+        if (!$has_table) {
+            StdOut::print("  La tabla migrations no existe; todas las migraciones aparecen como pendientes." . PHP_EOL);
         }
     }
 

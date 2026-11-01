@@ -1,6 +1,6 @@
 # Ciclo de migraciones
 
-Esta página describe el registro y los comandos de migración que existen en este checkout. La ayuda de CLI se consultó y el código se trazó; no se ejecutó ninguna migración ni se abrió una base de datos.
+Esta página describe el registro y los comandos de migración que existen en este checkout. Los comandos y sus opciones se trazaron al código; no se ejecutó ninguna migración ni se abrió una base de datos.
 
 ## Ubicación y formato
 
@@ -20,13 +20,14 @@ La tabla de seguimiento se crea y consulta desde la conexión predeterminada; ca
 
 ## Comandos disponibles
 
-`php com migrations help` enumeró 15 comandos en la ayuda ejecutada el 2026-10-24:
+El grupo de migraciones tiene 17 comandos, contando comandos canónicos y no sus alias:
 
 | Comando | Alias | Comportamiento y notas |
 | --- | --- | --- |
 | `clear` | `clear-log` | Borra filas del registro `migrations`; no ejecuta `down()` ni revierte DDL. Sin `--to`, la rama actual borra las entradas del registro completo. |
 | `fresh` | — | Destructivo: requiere `--to` y `--force`. Borra tablas de la conexión elegida y limpia el registro; `--migrate` vuelve a aplicar migraciones. Si se indica `--file` o `--dir`, la fuente deriva a `redo` en vez de borrar todas las tablas. |
-| `list` | `ls` | Enumera archivos disponibles; admite filtros `--dir`, `--table` y `--contains`. No es un informe del estado aplicado en la base. |
+| `list-files` | `list`, `ls` | Enumera archivos disponibles; admite filtros `--dir`, `--table` y `--contains`. `--full-discovery` incluye migraciones de la aplicación, módulos y paquetes, con su origen y ruta relativa. No es un informe del estado aplicado en la base. |
+| `list-on-db` | `db-list` | Muestra solo los registros de `migrations`; admite `--to` para filtrar otra conexión. No descubre archivos. |
 | `make` | `create`, `new` | Genera un archivo; admite `--dir`, `--table`, `--class-name`, `--to` y `--create`. Puede escribir el archivo de salida. |
 | `migrate` | `up`, `run` | Ejecuta pendientes. Admite `--file`, `--dir`, `--to`, `--step`, `--skip`, `--make`, `--retry` y `--simulate`. |
 | `migrate-module` | `module-migrate`, `migrate:module` | Ejecuta el directorio `modules/<módulo>/database/migrations`; admite `--step` y `--to`. |
@@ -39,8 +40,9 @@ La tabla de seguimiento se crea y consulta desde la conexión predeterminada; ca
 | `rollback` | `down` | Revierte por default una migración; admite `--step`, `--all`, `--file`, `--dir`, `--to` y `--simulate`. |
 | `rollback-module` | `module-rollback`, `rollback:module` | Revierte migraciones de un módulo; admite `--step` o `--all`. |
 | `rollback-package` | `package-rollback`, `rollback:package` | Revierte migraciones de un paquete; admite `--step` o `--all`. |
+| `status` | `st` | Compara archivos y registros; por defecto limita la comparación al directorio de migraciones de la aplicación y admite `--dir`. `--full-discovery` compara la aplicación, módulos y paquetes por ruta relativa y nombre. |
 
-La ayuda del grupo no enumera comandos `status` ni `log`. Para confirmar el catálogo de otra aplicación consulta la ayuda generada de esa instalación.
+`--full-discovery` recorre recursivamente `database/migrations/`, `modules/*/database/migrations/` y `packages/*/*/database/migrations/`, además de las rutas de módulos y paquetes configuradas por SimpleRest. El inventario es de lectura: no incluye archivos de migración, no inicia providers y no ejecuta migraciones. `status` marca las entradas de la tabla que no corresponden a un archivo descubierto como huérfanas. `log` no está disponible en este grupo.
 
 ## Flags que requieren especial cuidado
 
@@ -54,7 +56,7 @@ No confundas `php com migrations ...` con el grupo de scaffolding `php com make 
 
 ## Verificación
 
-Se ejecutaron solo `php com migrations help`, `php com migrations migrate --help`, `php com migrations make --help` y la ayuda de `fresh`; estos comandos mostraron metadatos de ayuda y no ejecutaron una migración. Se inspeccionaron `BaseMigrationsCommand`, los wrappers de comando, `Migration`, `IMigration` y los templates.
+En la revisión anterior del checkout se ejecutaron `php com migrations help`, `php com migrations migrate --help`, `php com migrations make --help` y la ayuda de `fresh`; esos comandos mostraron metadatos y no ejecutaron migraciones. Para esta actualización se ejecutó `php -l` sobre los cinco archivos PHP modificados, además de `php com migrations help` y `php com migrations list-files --full-discovery`; este último solo leyó archivos. No se consultó la base de datos ni se ejecutaron suites de pruebas.
 
 No se encontró una suite dedicada a ejecución de migraciones bajo `unit-tests/`; los tests de `CommandRegistry` consultados cubren parser, dispatch y proveedores de comandos, no efectos de DDL. No se verificaron una conexión, una transacción real, rollback, simulación, ejecución por módulo/paquete ni compatibilidad por driver.
 
