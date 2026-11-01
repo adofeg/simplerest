@@ -850,13 +850,13 @@ abstract class BaseMigrationsCommand extends BaseCommand
         $rows = $this->migrationRegistryRows($to_db);
         $conn_label = $to_db ?? 'default';
 
-        StdOut::print("Migraciones registradas en `migrations` (`$conn_label`)" . PHP_EOL);
-        StdOut::print(str_repeat('─', 60) . PHP_EOL);
+        StdOut::print("Migraciones registradas en `migrations` (`$conn_label`)");
+        StdOut::print(str_repeat('─', 60));
 
         if (!$has_table) {
-            StdOut::print("  La tabla migrations no existe." . PHP_EOL);
+            StdOut::print("  La tabla migrations no existe.");
         } elseif (empty($rows)) {
-            StdOut::print("  No hay migraciones registradas." . PHP_EOL);
+            StdOut::print("  No hay migraciones registradas.");
         } else {
             foreach ($rows as $row) {
                 $filename = $row['filename'] ?? '';
@@ -868,12 +868,12 @@ abstract class BaseMigrationsCommand extends BaseCommand
                 if ($createdAt !== null && $createdAt !== '') $details[] = "created_at=$createdAt";
 
                 $suffix = empty($details) ? '' : ' [' . implode(', ', $details) . ']';
-                StdOut::print("  " . ($row['id'] ?? '') . "  $filename$suffix" . PHP_EOL);
+                StdOut::print("  " . ($row['id'] ?? '') . "  $filename$suffix");
             }
         }
 
-        StdOut::print(str_repeat('─', 60) . PHP_EOL);
-        StdOut::print("  " . count($rows) . " registradas" . PHP_EOL);
+        StdOut::print(str_repeat('─', 60));
+        StdOut::print("  " . count($rows) . " registradas");
     }
 
     protected function doStatus(...$opt): void
@@ -917,9 +917,9 @@ abstract class BaseMigrationsCommand extends BaseCommand
                 }
             }
 
-            StdOut::print("Estado de Migraciones (`$conn_label`, descubrimiento completo)" . PHP_EOL);
-            StdOut::print(str_pad('SOURCE', 32) . str_pad('MIGRATION', 66) . "STATUS" . PHP_EOL);
-            StdOut::print(str_repeat('─', 112) . PHP_EOL);
+            StdOut::print("Estado de Migraciones (`$conn_label`, descubrimiento completo)");
+            StdOut::print(str_pad('SOURCE', 32) . str_pad('MIGRATION', 66) . "STATUS");
+            StdOut::print(str_repeat('─', 112));
 
             $applied_count = 0;
             $pending_count = 0;
@@ -928,7 +928,7 @@ abstract class BaseMigrationsCommand extends BaseCommand
                 $is_applied = isset($applied[$identity_key]);
                 $status = $is_applied ? 'Applied' : 'Pending';
                 $is_applied ? $applied_count++ : $pending_count++;
-                StdOut::print(str_pad($migration['source'], 32) . str_pad($migration['relative_path'], 66) . $status . PHP_EOL);
+                StdOut::print(str_pad($migration['source'], 32) . str_pad($migration['relative_path'], 66) . $status);
             }
 
             $orphaned_count = count($orphaned_rows);
@@ -937,13 +937,13 @@ abstract class BaseMigrationsCommand extends BaseCommand
                 $stored_path = trim((string) ($row['path'] ?? ''));
                 $identity = MigrationCatalog::identityFromRegistryRow($row);
                 $label = $identity ?? ($stored_path === '' ? $filename : $stored_path . '/' . $filename);
-                StdOut::print(str_pad('unknown', 32) . str_pad($label, 66) . 'Orphaned' . PHP_EOL);
+                StdOut::print(str_pad('unknown', 32) . str_pad($label, 66) . 'Orphaned');
             }
 
-            StdOut::print(str_repeat('─', 112) . PHP_EOL);
-            StdOut::print("  $applied_count aplicadas   $pending_count pendientes   $orphaned_count huérfanas" . PHP_EOL);
+            StdOut::print(str_repeat('─', 112));
+            StdOut::print("  $applied_count aplicadas   $pending_count pendientes   $orphaned_count huérfanas");
             if (!$has_table) {
-                StdOut::print("  La tabla migrations no existe; no hay registros aplicados que comparar." . PHP_EOL);
+                StdOut::print("  La tabla migrations no existe; no hay registros aplicados que comparar.");
             }
             return;
         }
@@ -967,8 +967,8 @@ abstract class BaseMigrationsCommand extends BaseCommand
             $applied_filenames[$row['filename']] = true;
         }
 
-        StdOut::print("Estado de Migraciones (`$conn_label`)" . PHP_EOL);
-        StdOut::print(str_repeat('─', 60) . PHP_EOL);
+        StdOut::print("Estado de Migraciones (`$conn_label`)");
+        StdOut::print(str_repeat('─', 60));
 
         $pending = 0;
         $applied = 0;
@@ -991,10 +991,10 @@ abstract class BaseMigrationsCommand extends BaseCommand
             }
         }
 
-        StdOut::print(str_repeat('─', 60) . PHP_EOL);
-        StdOut::print("  ✅ $applied aplicadas   ❓ $pending pendientes   ⚠️  $orphaned huérfanas" . PHP_EOL);
+        StdOut::print(str_repeat('─', 60));
+        StdOut::print("  ✅ $applied aplicadas   ❓ $pending pendientes   ⚠️  $orphaned huérfanas");
         if (!$has_table) {
-            StdOut::print("  La tabla migrations no existe; todas las migraciones aparecen como pendientes." . PHP_EOL);
+            StdOut::print("  La tabla migrations no existe; todas las migraciones aparecen como pendientes.");
         }
     }
 
