@@ -108,3 +108,4 @@
 [2026-10-26 11:21:59]	No se encontró una version válida	ApiController.php fix
 [2026-10-26 11:23:02]	3.0.1	Automatic update
 [2026-10-31 20:32:59]	3.0.2	Automatic update
+[2026-11-01 20:13:48]	3.0.3	Automatic update

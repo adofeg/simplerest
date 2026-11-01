@@ -1,0 +1,1 @@
+Corrige el bug de round-trip en las funciones CSV de Files.php: los valores que terminan en barra invertida se corrompen. Aplica la corrección al framework canónico en D:\laragon\www\simplerest, no a la copia de GoProp. Añade unit tests y verifica que pasen.

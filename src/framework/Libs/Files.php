@@ -313,7 +313,7 @@ class Files
 		$f = fopen($filename, 'w'); 
  
 		if ($header){			
-			fputcsv($f, array_keys($array[0])); 
+			fputcsv($f, array_keys($array[0]), ',', '"', '');
 		}
 
 		fclose($f);
@@ -322,7 +322,7 @@ class Files
 		
 		foreach ($array as $row)
 		{
-			fputcsv($f, $row);
+			fputcsv($f, $row, ',', '"', '');
 		}
 
 		fclose($f);
@@ -424,7 +424,7 @@ class Files
 		rewind($handle);
 	
 		if ($header) {
-			$cabecera = fgetcsv($handle, null, $separator);
+			$cabecera = fgetcsv($handle, null, $separator, '"', '');
 			$ch = count($cabecera);
 	
 			foreach ($cabecera as $ix => $row) {
@@ -435,7 +435,7 @@ class Files
 		}
 		
 		$i = 0;
-		while ( ($data = fgetcsv($handle, null, $separator) ) !== FALSE ) {
+		while ( ($data = fgetcsv($handle, null, $separator, '"', '') ) !== FALSE ) {
 			if ($assoc){
 				for ($j=0;$j<$ch; $j++){					
 					$head_key = $cabecera[$j];
@@ -534,9 +534,9 @@ class Files
 	
 		if ($header) {
 			if ($firstLine === null) {
-				$cabecera = fgetcsv($handle, null, $separator);
+				$cabecera = fgetcsv($handle, null, $separator, '"', '');
 			} else {
-				$cabecera = str_getcsv($firstLine, $separator);
+				$cabecera = str_getcsv($firstLine, $separator, '"', '');
 			}
 	
 			$ch = count($cabecera);
@@ -592,7 +592,7 @@ class Files
         $count = 0;
 
         // loop through the file line-by-line
-        while (($data = fgetcsv($handle, null, $separator)) !== false) {
+        while (($data = fgetcsv($handle, null, $separator, '"', '')) !== false) {
 			$line = '';
 			foreach ($data as $k => $val){
 				if (empty($val)){
