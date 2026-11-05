@@ -14,6 +14,7 @@ class SortedIterator extends \SplHeap
         }
     }
 
+    #[\Override]
     public function compare($b, $a): int
     {
         return strcmp($a->getRealpath(), $b->getRealpath());

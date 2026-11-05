@@ -18,8 +18,8 @@ class Paginator
     protected $query = '';
     protected $binding = [];
 
-    const TOP    = 'TOP';
-    const BOTTOM = 'BOTTOM';
+    const string TOP    = 'TOP';
+    const string BOTTOM = 'BOTTOM';
 
     /*
         Calcula el offset dados el size la page y la page actual

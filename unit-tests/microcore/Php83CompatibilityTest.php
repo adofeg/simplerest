@@ -2,12 +2,17 @@
 
 declare(strict_types=1);
 
+use Boctulus\Simplerest\Core\Controllers\WebController;
 use Boctulus\Simplerest\Core\Libs\ApiClient;
+use Boctulus\Simplerest\Core\Libs\DB;
 use Boctulus\Simplerest\Core\Libs\Date;
 use Boctulus\Simplerest\Core\Libs\Env;
 use Boctulus\Simplerest\Core\Libs\MySQLDatabaseBackup;
+use Boctulus\Simplerest\Core\Libs\Paginator;
 use Boctulus\Simplerest\Core\Libs\SortedIterator;
 use Boctulus\Simplerest\Core\Libs\Strings;
+use Boctulus\Simplerest\Core\Model;
+use Boctulus\Simplerest\Core\Response;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -148,6 +153,64 @@ final class Php83CompatibilityTest extends TestCase
 
             self::assertFalse($seenOptional, "Required \${$parameter->getName()} follows an optional parameter.");
         }
+    }
+
+    public function testEveryCoreFileDeclaresStrictTypes(): void
+    {
+        $core = dirname(__DIR__, 2) . '/src/framework/';
+        $missing = [];
+        $iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($core, FilesystemIterator::SKIP_DOTS));
+
+        foreach ($iterator as $file) {
+            if ($file->getExtension() !== 'php' || str_contains($file->getPathname(), '/Templates/')) {
+                continue;
+            }
+
+            $source = (string) file_get_contents($file->getPathname());
+            if (!str_contains($source, 'declare(strict_types=1)')) {
+                $missing[] = str_replace($core, '', $file->getPathname());
+            }
+        }
+
+        self::assertSame([], $missing);
+    }
+
+    public function testDriverConstantsAreTyped(): void
+    {
+        foreach (['MYSQL', 'SQLITE', 'PGSQL', 'SQLSRV', 'INFOMIX', 'DB2', 'ORACLE', 'SYBASE', 'FIREBIRD'] as $name) {
+            $constant = new ReflectionClassConstant(DB::class, $name);
+            self::assertTrue($constant->hasType(), "DB::$name must be typed");
+            self::assertSame('string', (string) $constant->getType());
+        }
+    }
+
+    public function testPaginatorAndModelConstantsAreTyped(): void
+    {
+        self::assertSame('string', (string) (new ReflectionClassConstant(Paginator::class, 'TOP'))->getType());
+        self::assertSame('int', (string) (new ReflectionClassConstant(Model::class, 'EXECUTION_MODE_NORMAL'))->getType());
+        self::assertSame('bool', (string) (new ReflectionClassConstant(Model::class, 'DECIMAL_AS_STRING'))->getType());
+    }
+
+    public function testOverriddenMethodsUseTheOverrideAttribute(): void
+    {
+        $targets = [
+            [Response::class, 'offsetGet'],
+            [Response::class, 'offsetSet'],
+            [SortedIterator::class, 'compare'],
+        ];
+
+        foreach ($targets as [$class, $method]) {
+            $reflection = new ReflectionMethod($class, $method);
+            self::assertNotEmpty($reflection->getAttributes(\Override::class), "$class::$method");
+        }
+    }
+
+    public function testResponseEncodesWithoutPrettyPrinting(): void
+    {
+        $response = (new ReflectionClass(Response::class))->newInstanceWithoutConstructor();
+        $method = new ReflectionMethod(Response::class, 'do_encode');
+
+        self::assertSame('{"ok":true}', $method->invoke($response, ['ok' => true]));
     }
 
     public function testCoreHasNoImplicitNullableParameters(): void
