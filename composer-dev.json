@@ -60,7 +60,8 @@
   "scripts": {
     "test:microcore": "phpunit --no-coverage unit-tests/microcore",
     "analyse": "phpstan analyse -c phpstan-core.neon --no-progress",
-    "analyse:baseline": "phpstan analyse -c phpstan-core.neon --no-progress --generate-baseline=phpstan-core-baseline.neon"
+    "analyse:baseline": "phpstan analyse -c phpstan-core.neon --no-progress --generate-baseline=phpstan-core-baseline.neon",
+    "rector:check": "rector process --dry-run --config rector.php --no-progress-bar"
   },
   "config": {
     "optimize-autoloader": true,

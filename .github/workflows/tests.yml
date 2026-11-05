@@ -44,6 +44,12 @@ jobs:
       - name: Run microcore PHPUnit suite
         run: vendor/bin/phpunit --no-configuration --bootstrap vendor/autoload.php --no-coverage unit-tests/microcore
 
+      - name: Static analysis (core)
+        run: vendor/bin/phpstan analyse -c phpstan-core.neon --no-progress
+
+      - name: Reject deprecated constructs and implicit nullable parameters
+        run: vendor/bin/rector process --dry-run --config rector.php --no-progress-bar
+
       - name: Run PACK and legacy-library boundary suite
         run: vendor/bin/phpunit --no-configuration --bootstrap vendor/autoload.php --no-coverage unit-tests/pack
 
